@@ -13,15 +13,27 @@
 
 using namespace std;
 
-int main (int argc, char *argv[]);
+int main(int argc, char *argv[]);
 
-vector <vector<long long int>> load_matrix(const char* file_name);
+void load_input(vector <vector<long long int>> *matrix1,
+                vector <vector<long long int>> *matrix2,
+                int *rows,
+                int *cols);
+
+int check_input(vector <vector<long long int>> *matrix1,
+                vector <vector<long long int>> *matrix2,
+                int rows,
+                int cols);
+
+vector <vector<long long int>> load_matrix(const char *file_name);
 
 int process_matrix(vector <vector<long long int>> *matrix);
 
-bool check_matrices(vector <vector<long long int>> matrix1,
-                    vector <vector<long long int>> matrix2,
-                    int rows,
-                    int cols);
+void shift_rows(vector <vector<long long int>> *matrix);
 
-void print_matrix(vector <vector<long long int>> matrix);
+vector <vector<long long int>> shift_cols(const vector <vector<long long int>> *input);
+
+void print_matrix(vector <vector<long long int>> *matrix);
+
+void distribute_matrices(vector <vector<long long int>> *matrix1,
+                         vector <vector<long long int>> *matrix2);
