@@ -1,7 +1,7 @@
 /**
  * PRL - Project - Mesh Multiplication
  * Implementation of parallel sorting algorithm called Pipeline Merge Sort.
- * @file            pms.h
+ * @file            mm.h
  * @version			2.0
  * @author			Daniel Konecny (xkonec75)
  * @organisation	Brno University of Technology - Faculty of Information Technologies
