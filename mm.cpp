@@ -2,7 +2,7 @@
  * PRL - Project - Mesh Multiplication
  * Implementation of parallel sorting algorithm called Pipeline Merge Sort.
  * @file            pms.cpp
- * @version			1.0
+ * @version			2.0
  * @author			Daniel Konecny (xkonec75)
  * @organisation	Brno University of Technology - Faculty of Information Technologies
  * @date			03. 05. 2021
@@ -22,6 +22,8 @@
 using namespace std;
 
 #define TAG 0
+#define TAG_FROM_LEFT 1
+#define TAG_FROM_ABOVE 2
 #define MAT1FILE "mat1"
 #define MAT2FILE "mat2"
 
@@ -49,7 +51,8 @@ int main(int argc, char *argv[]) {
 
             shift_rows(&matrix1);
             matrix2 = shift_cols(&matrix2);
-            distribute_matrices(&matrix1, &matrix2);
+
+            distribute_matrices(matrix1, matrix2, rows, cols);
         }
     }
 
@@ -64,7 +67,7 @@ int main(int argc, char *argv[]) {
 
     /// Every process takes its part in computing the multiplication.
     receive_dimensions(&rows, &cols, &rest, last_process_id, &stat);
-    compute_multiplication(rest, last_process_id, &stat);
+    compute_multiplication(rows, cols, rest, process_id, &stat);
 
     if (process_id == 0) {
         vector <vector<long long int>> result_matrix = collect_result(rows, cols, &stat);
@@ -197,44 +200,38 @@ vector <vector<long long int>> shift_cols(const vector <vector<long long int>> *
     return transpose_matrix(&transposed);
 }
 
-void distribute_matrices(vector <vector<long long int>> *matrix1,
-                         vector <vector<long long int>> *matrix2) {
-    int matrix1_rows = matrix1->size();
-    int matrix1_cols = matrix1->front().size();
-    int matrix2_rows = matrix2->size();
-    int matrix2_cols = matrix2->front().size();
+void distribute_matrices(vector <vector<long long int>> matrix1,
+                         vector <vector<long long int>> matrix2,
+                         int rows,
+                         int cols) {
+    int shifts = max(matrix1.front().size(), matrix2.size());
 
-    /// Each shift is the shift of matrices on the input.
-    for (int shift = 0; shift < matrix1_cols + matrix2_cols; shift++) {
-        /// Takes care of the horizontal input matrix (on the left-hand side).
-        for (int row = 0; row < matrix1_rows; row++) {
-            for (int col = matrix1_cols + matrix2_cols - 2 - shift; col > matrix1_cols - 2 - shift; col--) {
-                /// Do not compute if the indices are out of matrix range.
-                if (col < 0 || col > matrix1_cols - 1) {
-                    continue;
-                }
-                /// Send number from matrix to a specific process, but only if it's not padding added by shift.
-                long long int element = (*matrix1)[row][col];
+    /// Do all the shifts to send all data to the process mesh.
+    for (int shift = 0; shift < shifts; shift++) {
+        /// Send only if there are numbers to send from left.
+        if (matrix1.front().size() > 0) {
+            /// Send all numbers from the last column (except from padding LLONG_MAX) and erase them.
+            for (int row = 0; row < rows; row++) {
+                long long int element = matrix1[row].back();
+                matrix1[row].pop_back();
                 if (element != LLONG_MAX) {
-                    int process_index = matrix2_cols * row + shift - matrix1_cols + 1 + col;
-                    MPI_Send(&element, 1, MPI_LONG_LONG_INT, process_index, TAG, MPI_COMM_WORLD);
+                    int process_index = row * cols;
+                    MPI_Send(&element, 1, MPI_LONG_LONG_INT, process_index, TAG_FROM_LEFT, MPI_COMM_WORLD);
                 }
             }
         }
-        /// Takes care of the vertical input matrix (on the upper side).
-        for (int col = 0; col < matrix2_cols; col++) {
-            for (int row = matrix2_rows + matrix1_rows - 2 - shift; row > matrix2_rows - 2 - shift; row--) {
-                /// Do not compute if the indices are out of matrix range.
-                if (row < 0 || row > matrix2_rows - 1) {
-                    continue;
-                }
-                /// Send number from matrix to a specific process, but only if it's not padding added by shift.
-                long long int element = (*matrix2)[row][col];
+        /// Send only if there are numbers to send from above.
+        if (matrix2.size() > 0) {
+            /// Send all numbers from the last row (except from padding LLONG_MAX) and erase it.
+            for (int col = cols - 1; col >= 0; col--) {
+                long long int element = matrix2.back().back();
+                matrix2.back().pop_back();
                 if (element != LLONG_MAX) {
-                    int process_index = matrix2_cols * (row + shift - matrix2_rows + 1) + col;
-                    MPI_Send(&element, 1, MPI_LONG_LONG_INT, process_index, TAG, MPI_COMM_WORLD);
+                    int process_index = col;
+                    MPI_Send(&element, 1, MPI_LONG_LONG_INT, process_index, TAG_FROM_ABOVE, MPI_COMM_WORLD);
                 }
             }
+            matrix2.pop_back();
         }
     }
 }
@@ -245,16 +242,41 @@ void receive_dimensions(int *rows, int *cols, int *rest, int last_process_id, MP
     MPI_Recv(rest, 1, MPI_INT, last_process_id, TAG, MPI_COMM_WORLD, stat);
 }
 
-void compute_multiplication(int rest, int last_process_id, MPI_Status *stat) {
+void compute_multiplication(int rows, int cols, int rest, int process_id, MPI_Status *stat) {
     long long int sum = 0;
+    int recv_from1, recv_from2;
+    int next_process_in_row = process_id + 1;
+    int next_process_in_col = process_id + cols;
+    bool send_right = (next_process_in_row / rows) < cols;
+    bool send_down = (next_process_in_col / cols) < rows;
+
+    /// Set from which processes receive numbers.
+    if (process_id % cols == 0) {
+        recv_from1 = rows * cols - 1;
+    } else {
+        recv_from1 = process_id - 1;
+    }
+    if (process_id < cols) {
+        recv_from2 = rows * cols - 1;
+    } else {
+        recv_from2 = process_id - cols;
+    }
+
     /// Rest is the matching dimension, therefore, this many multiplications has to be done.
     for (int i = 0; i < rest; i++) {
         long long int num1, num2;
 
-        MPI_Recv(&num1, 1, MPI_LONG_LONG_INT, last_process_id, TAG, MPI_COMM_WORLD, stat);
-        MPI_Recv(&num2, 1, MPI_LONG_LONG_INT, last_process_id, TAG, MPI_COMM_WORLD, stat);
-
+        MPI_Recv(&num1, 1, MPI_LONG_LONG_INT, recv_from1, TAG_FROM_LEFT, MPI_COMM_WORLD, stat);
+        MPI_Recv(&num2, 1, MPI_LONG_LONG_INT, recv_from2, TAG_FROM_ABOVE, MPI_COMM_WORLD, stat);
         sum += num1 * num2;
+
+        /// Send numbers further on if necessary.
+        if (send_right) {
+            MPI_Send(&num1, 1, MPI_LONG_LONG_INT, next_process_in_row, TAG_FROM_LEFT, MPI_COMM_WORLD);
+        }
+        if (send_down) {
+            MPI_Send(&num2, 1, MPI_LONG_LONG_INT, next_process_in_col, TAG_FROM_ABOVE, MPI_COMM_WORLD);
+        }
     }
     MPI_Send(&sum, 1, MPI_LONG_LONG_INT, 0, TAG, MPI_COMM_WORLD);
 }

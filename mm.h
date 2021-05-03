@@ -2,7 +2,7 @@
  * PRL - Project - Mesh Multiplication
  * Implementation of parallel sorting algorithm called Pipeline Merge Sort.
  * @file            pms.h
- * @version			1.0
+ * @version			2.0
  * @author			Daniel Konecny (xkonec75)
  * @organisation	Brno University of Technology - Faculty of Information Technologies
  * @date			03. 05. 2021
@@ -86,12 +86,16 @@ vector <vector<long long int>> transpose_matrix(const vector <vector<long long i
 vector <vector<long long int>> shift_cols(const vector <vector<long long int>> *input);
 
 /**
- * Parses the matrices and sends values to correct processes to compute the multiplication.
+ * Parses the matrices and sends values to processes in the first row and column.
  * @param matrix1
  * @param matrix2
+ * @param rows
+ * @param cols
  */
-void distribute_matrices(vector <vector<long long int>> *matrix1,
-                         vector <vector<long long int>> *matrix2);
+void distribute_matrices(vector <vector<long long int>> matrix1,
+                         vector <vector<long long int>> matrix2,
+                         int rows,
+                         int cols);
 
 /**
  * Save dimensions sent from the loading (last) process.
@@ -105,13 +109,16 @@ void receive_dimensions(int *rows, int *cols, int *rest, int last_process_id, MP
 
 /**
  * Receive two values, compute their multiplication and sum them with previous multiplications.
- * Each process does this on its own.
+ * Send the values to following processes, if necessary.
  * After all multiplications and additions are done, result is sent to the process number 0.
+ * Each process does this on its own.
+ * @param rows
+ * @param cols
  * @param rest
- * @param last_process_id
+ * @param process_id
  * @param stat
  */
-void compute_multiplication(int rest, int last_process_id, MPI_Status *stat);
+void compute_multiplication(int rows, int cols, int rest, int process_id, MPI_Status *stat);
 
 /**
  * Receive all sums from all processes doing the computations.
