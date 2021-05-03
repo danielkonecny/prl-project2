@@ -5,7 +5,7 @@
  * @version			1.0
  * @author			Daniel Konecny (xkonec75)
  * @organisation	Brno University of Technology - Faculty of Information Technologies
- * @date			02. 05. 2021
+ * @date			03. 05. 2021
  */
 
 #include <vector>
@@ -85,13 +85,45 @@ vector <vector<long long int>> transpose_matrix(const vector <vector<long long i
  */
 vector <vector<long long int>> shift_cols(const vector <vector<long long int>> *input);
 
+/**
+ * Parses the matrices and sends values to correct processes to compute the multiplication.
+ * @param matrix1
+ * @param matrix2
+ */
 void distribute_matrices(vector <vector<long long int>> *matrix1,
                          vector <vector<long long int>> *matrix2);
 
+/**
+ * Save dimensions sent from the loading (last) process.
+ * @param rows
+ * @param cols
+ * @param rest
+ * @param last_process_id
+ * @param stat
+ */
 void receive_dimensions(int *rows, int *cols, int *rest, int last_process_id, MPI_Status *stat);
 
+/**
+ * Receive two values, compute their multiplication and sum them with previous multiplications.
+ * Each process does this on its own.
+ * After all multiplications and additions are done, result is sent to the process number 0.
+ * @param rest
+ * @param last_process_id
+ * @param stat
+ */
 void compute_multiplication(int rest, int last_process_id, MPI_Status *stat);
 
+/**
+ * Receive all sums from all processes doing the computations.
+ * @param rows
+ * @param cols
+ * @param stat
+ * @return Resulting matrix.
+ */
 vector <vector<long long int>> collect_result(int rows, int cols, MPI_Status *stat);
 
+/**
+ * Print matrix in a format defined for output.
+ * @param matrix
+ */
 void print_matrix(vector <vector<long long int>> *matrix);
